@@ -31,52 +31,44 @@ def download_video(req: VideoRequest):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(req.url, download=False)
             
-            # Agar video hi nahi hai (sirf photo ya text post hai)
             if 'formats' not in info and 'url' not in info:
-                raise HTTPException(status_code=400, detail="Is link par koi video nahi mili. Yeh photo ya text post ho sakta hai.")
+                raise HTTPException(status_code=400, detail="Is link par koi video nahi mili. Photo ya text post ho sakta hai.")
 
             formats = info.get('formats', [])
             video_formats = []
-            seen_urls = set()
+            seen_heights = set()
             
             hd_link = None
             sd_link = None
             
-            for f in formats:
-                if f.get('url') and f.get('url') not in seen_urls:
-                    vcodec = f.get('vcodec', 'none')
-                    height = f.get('height') or 0
-                    
-                    # Sirf video formats uthayein (audio ignore karein)
-                    if vcodec != 'none' or height > 0:
-                        seen_urls.add(f.get('url'))
-                        quality_name = f"{height}p" if height else "Video"
-                        
-                        video_formats.append({
-                            "quality": quality_name,
-                            "url": f.get('url')
-                        })
-                        
-                        if height >= 720 and not hd_link:
-                            hd_link = f.get('url')
-                        elif height > 0 and height < 720 and not sd_link:
-                            sd_link = f.get('url')
+            # Sort by height (best quality first)
+            valid_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
+            valid_formats.sort(key=lambda x: x.get('height', 0), reverse=True)
             
-            # Fallback: Agar list khali hai par direct url mila hai
-            if not video_formats and info.get('url'):
-                video_formats.append({"quality": "Default", "url": info.get('url')})
-                if not hd_link: hd_link = info.get('url')
-                if not sd_link: sd_link = info.get('url')
-
-            # Agar phir bhi kuch na mile toh error dein
-            if not video_formats:
-                raise HTTPException(status_code=404, detail="Video download link nahi mil paya. Private video ho sakti hai.")
-
-            # Duration aur Thumbnail handle karein
-            duration = info.get('duration')
-            if not duration:
-                duration = 0
+            for f in valid_formats:
+                height = f.get('height')
                 
+                # Sirf unique quality rakhein (no duplicates)
+                if height not in seen_heights:
+                    seen_heights.add(height)
+                    link = f.get('url')
+                    
+                    video_formats.append({
+                        "quality": f"{height}p",
+                        "url": link
+                    })
+                    
+                    if height >= 720 and not hd_link:
+                        hd_link = link
+                    elif height < 720 and not sd_link:
+                        sd_link = link
+            
+            if not hd_link and video_formats: hd_link = video_formats[0]['url']
+            if not sd_link and video_formats: sd_link = video_formats[-1]['url']
+
+            # Duration format (remove decimals)
+            duration = int(info.get('duration', 0)) if info.get('duration') else 0
+            
             thumbnail = info.get('thumbnail')
             if not thumbnail and 'thumbnails' in info and len(info['thumbnails']) > 0:
                 thumbnail = info['thumbnails'][-1].get('url', '')
