@@ -22,19 +22,14 @@ def home():
 
 @app.post("/download")
 def download_video(req: VideoRequest):
-    # Yahan humne YouTube bot detection bypass karne ki koshish ki hai
+    # Yahan humne YouTube bot detection bypass aur Audio format add kiya hai
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
         'extractor_args': {
-            'youtube': {
-                # Multiple clients try kar rahe hain taaki koi ek kaam kar jaye
-                'player_client': ['tv', 'mweb', 'ios', 'android_vr'] 
-            },
-            'instagram': {
-                'api': ['graphql']
-            }
+            'youtube': {'player_client': ['tv', 'mweb', 'ios', 'android_vr']},
+            'instagram': {'api': ['graphql']}
         },
         'geo_bypass': True,
     }
@@ -51,8 +46,19 @@ def download_video(req: VideoRequest):
             seen_heights = set()
             hd_link = None
             sd_link = None
+            audio_link = None
 
-            # Sirf MP4 aur valid video formats filter karna
+            # Audio link dhundhna (Best Audio)
+            for f in formats:
+                if f.get('vcodec') == 'none' and f.get('acodec') != 'none' and f.get('url'):
+                    audio_link = f.get('url')
+                    break
+            
+            # Agar direct audio url na mile toh best audio extract karein
+            if not audio_link:
+                audio_link = info.get('url') 
+
+            # Video formats filter karna
             valid_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
             valid_formats.sort(key=lambda x: x.get('height', 0), reverse=True)
 
@@ -84,6 +90,7 @@ def download_video(req: VideoRequest):
                 "duration": duration,
                 "hd_url": hd_link,
                 "sd_url": sd_link,
+                "audio_url": audio_link, # <-- Naya Audio Feature
                 "all_formats": video_formats
             }
     except Exception as e:
