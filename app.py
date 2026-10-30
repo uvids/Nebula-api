@@ -22,13 +22,19 @@ def home():
 
 @app.post("/download")
 def download_video(req: VideoRequest):
+    # Yahan humne YouTube bot detection bypass karne ki koshish ki hai
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'skip_download': True,
         'extractor_args': {
-            'youtube': {'player_client': ['android', 'web']},
-            'instagram': {'api': ['graphql']}
+            'youtube': {
+                # Multiple clients try kar rahe hain taaki koi ek kaam kar jaye
+                'player_client': ['tv', 'mweb', 'ios', 'android_vr'] 
+            },
+            'instagram': {
+                'api': ['graphql']
+            }
         },
         'geo_bypass': True,
     }
@@ -46,6 +52,7 @@ def download_video(req: VideoRequest):
             hd_link = None
             sd_link = None
 
+            # Sirf MP4 aur valid video formats filter karna
             valid_formats = [f for f in formats if f.get('vcodec') != 'none' and f.get('height')]
             valid_formats.sort(key=lambda x: x.get('height', 0), reverse=True)
 
@@ -55,11 +62,15 @@ def download_video(req: VideoRequest):
                     seen_heights.add(height)
                     link = f.get('url')
                     video_formats.append({"quality": f"{height}p", "url": link})
-                    if height >= 720 and not hd_link: hd_link = link
-                    elif height < 720 and not sd_link: sd_link = link
+                    if height >= 720 and not hd_link: 
+                        hd_link = link
+                    elif height < 720 and not sd_link: 
+                        sd_link = link
 
-            if not hd_link and video_formats: hd_link = video_formats[0]['url']
-            if not sd_link and video_formats: sd_link = video_formats[-1]['url']
+            if not hd_link and video_formats: 
+                hd_link = video_formats[0]['url']
+            if not sd_link and video_formats: 
+                sd_link = video_formats[-1]['url']
 
             duration = int(info.get('duration', 0)) if info.get('duration') else 0
             thumbnail = info.get('thumbnail')
